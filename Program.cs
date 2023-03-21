@@ -26,7 +26,8 @@ namespace ServiceBus;
             var sessionProcessorOptions = new ServiceBusSessionProcessorOptions
             {
                 MaxConcurrentSessions = 1,
-                MaxAutoLockRenewalDuration = TimeSpan.FromMinutes(60)
+                SessionIds = { args[0] },
+
             };
             await using var sessionProcessor = client.CreateSessionProcessor(queueName, sessionProcessorOptions);
 
@@ -43,8 +44,13 @@ namespace ServiceBus;
                 //Console.WriteLine($"Received session message with SessionId '{message.SessionId}' and MessageId '{message.MessageId}': {message.Body}");
                 Console.WriteLine($"Received session message SessionId '{message.SessionId}' : i_ext = '{i_ext}', GK = '{gk}'");
 
+                // Renew the session lock to prevent it from expiring prematurely
+            //    await args.RenewSessionLockAsync();
+
                 // Complete the session message to remove it from the queue
                 await args.CompleteMessageAsync(message);
+                  // Renew the session lock
+                
             };
 
             // Add an error handler to handle any errors that occur during message processing
@@ -58,8 +64,7 @@ namespace ServiceBus;
             Console.WriteLine($"Listening for session messages on queue '{queueName}'...");
             await sessionProcessor.StartProcessingAsync();
 
-            // Keep the processor running for 5 minutes
-            await Task.Delay(TimeSpan.FromMinutes(15));
+            await Task.Delay(TimeSpan.FromMinutes(60));
 
             // Stop the session processor
             await sessionProcessor.StopProcessingAsync();
