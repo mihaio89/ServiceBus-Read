@@ -1,106 +1,82 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
-using Azure.Messaging.ServiceBus.Administration;
-using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
+using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.Configuration;
 
-namespace ServiceBus
-{
+namespace ServiceBus;
     class Program
     {
+        static string? connectionString;
+        static string? queueName;
         static async Task Main(string[] args)
         {
-            // Load the configuration file
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.int.json", optional: true)
                 .Build();
 
-            // Get the configuration values
-            var connectionString = configuration["ServiceBus:ServiceBusConnectionString"];
-            var topicName = configuration["ServiceBus:TopicName"];
-            Console.WriteLine(topicName);
+            connectionString = configuration["ServiceBus:ServiceBusConnectionString"];
+            queueName = configuration["ServiceBus:QueueName"];
 
-            // Create a ServiceBusAdministrationClient
-            var adminClient = new ServiceBusAdministrationClient(connectionString);
+            string session = args[0];
 
-            // Get the list of available subscriptions in the topic
-            var subscriptions = adminClient.GetSubscriptionsAsync(topicName);
+            await ProcessMessageEventArgs(session);
 
-            // Create a ServiceBusClient
-            var client = new ServiceBusClient(connectionString);
 
-            // Receive messages from each subscription
-            await foreach (var subscription in subscriptions)
+        }
+
+        static async Task ProcessMessageEventArgs(string session) {
+
+                        // Create a ServiceBusClient and a ServiceBusSessionProcessor
+            await using var client = new ServiceBusClient(connectionString);
+            var sessionProcessorOptions = new ServiceBusSessionProcessorOptions
             {
-<<<<<<< HEAD
-                Console.WriteLine(subscription.SubscriptionName);
-
-                // Create a session processor for this subscription
-                var sessionProcessor = client.CreateSessionProcessor(
-                    topicName,
-                    subscription.SubscriptionName,
-                    new ServiceBusSessionProcessorOptions
-                    {
-                        MaxConcurrentSessions = 1
-                    });
-=======
                 MaxConcurrentSessions = 1,
-                MaxAutoLockRenewalDuration = TimeSpan.FromMinutes(60)
+                SessionIds = { session },
+
             };
             await using var sessionProcessor = client.CreateSessionProcessor(queueName, sessionProcessorOptions);
->>>>>>> parent of b8c2a97 (pass session id as argument)
 
-                // Process messages from the session
-                sessionProcessor.ProcessMessageAsync += async args =>
-                {
-                    // Deserialize the message body to a JObject
-                    JObject body = JObject.Parse(args.Message.Body.ToString());
+            // Add a session handler
+            sessionProcessor.ProcessMessageAsync += async args =>
+            {
+                var message = args.Message;
+                // Deserialize the message body to a JObject
+                JObject body = JObject.Parse(message.Body.ToString());
 
-                    // Extract the i_ext and GK values from the JObject
-                    string i_ext = (string)body["i_ext"];
-                    string gk = (string)body["it_bit_it"][0]["GK"];
+                // Extract the i_ext and GK values from the JObject
+                string i_ext = (string)body["i_ext"];
+                string gk = (string)body["it_bit_it"][0]["GK"];
+                //Console.WriteLine($"Received session message with SessionId '{message.SessionId}' and MessageId '{message.MessageId}': {message.Body}");
+                Console.WriteLine($"Received session message SessionId '{message.SessionId}' : i_ext = '{i_ext}', GK = '{gk}'");
 
-<<<<<<< HEAD
-                    // Print the message contents
-                    Console.WriteLine($"Received message from subscription '{subscription.SubscriptionName}': i_ext = '{i_ext}', GK = '{gk}'");
+                // Renew the session lock to prevent it from expiring prematurely
+            //    await args.RenewSessionLockAsync();
 
-                    // Complete the message to remove it from the queue
-                    await args.CompleteMessageAsync(args.Message);
-                };
-=======
                 // Complete the session message to remove it from the queue
                 await args.CompleteMessageAsync(message);
+                  // Renew the session lock
+                
             };
->>>>>>> parent of b8c2a97 (pass session id as argument)
 
-                            // Set the ProcessErrorAsync handler
-                sessionProcessor.ProcessErrorAsync += args =>
-                {
-                    Console.WriteLine(args.Exception.ToString());
-                    return Task.CompletedTask;
-                };
+            // Add an error handler to handle any errors that occur during message processing
+            sessionProcessor.ProcessErrorAsync += args =>
+            {
+                Console.WriteLine(args.Exception.ToString());
+                return Task.CompletedTask;
+            };
 
-                // Start processing messages from the session
-                await sessionProcessor.StartProcessingAsync();
+            // Start the session processor and wait for session messages to arrive
+            Console.WriteLine($"Listening for session messages on queue '{queueName}'...");
+            await sessionProcessor.StartProcessingAsync();
 
-<<<<<<< HEAD
-                // Wait for user input to stop processing messages from the session
-                Console.WriteLine("Press any key to stop processing messages from this subscription...");
-                Console.ReadKey();
-=======
-            // Keep the processor running for 5 minutes
-            await Task.Delay(TimeSpan.FromMinutes(15));
->>>>>>> parent of b8c2a97 (pass session id as argument)
+            await Task.Delay(TimeSpan.FromMinutes(60));
 
-                // Stop processing messages from the session
-                await sessionProcessor.StopProcessingAsync();
-            }
+            // Stop the session processor
+            await sessionProcessor.StopProcessingAsync();
 
-            // Close the ServiceBusClient
-            await client.DisposeAsync();
         }
     }
-}
