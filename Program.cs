@@ -35,6 +35,7 @@ namespace ServiceBus
             // Receive messages from each subscription
             await foreach (var subscription in subscriptions)
             {
+<<<<<<< HEAD
                 Console.WriteLine(subscription.SubscriptionName);
 
                 // Create a session processor for this subscription
@@ -45,6 +46,12 @@ namespace ServiceBus
                     {
                         MaxConcurrentSessions = 1
                     });
+=======
+                MaxConcurrentSessions = 1,
+                MaxAutoLockRenewalDuration = TimeSpan.FromMinutes(60)
+            };
+            await using var sessionProcessor = client.CreateSessionProcessor(queueName, sessionProcessorOptions);
+>>>>>>> parent of b8c2a97 (pass session id as argument)
 
                 // Process messages from the session
                 sessionProcessor.ProcessMessageAsync += async args =>
@@ -56,12 +63,18 @@ namespace ServiceBus
                     string i_ext = (string)body["i_ext"];
                     string gk = (string)body["it_bit_it"][0]["GK"];
 
+<<<<<<< HEAD
                     // Print the message contents
                     Console.WriteLine($"Received message from subscription '{subscription.SubscriptionName}': i_ext = '{i_ext}', GK = '{gk}'");
 
                     // Complete the message to remove it from the queue
                     await args.CompleteMessageAsync(args.Message);
                 };
+=======
+                // Complete the session message to remove it from the queue
+                await args.CompleteMessageAsync(message);
+            };
+>>>>>>> parent of b8c2a97 (pass session id as argument)
 
                             // Set the ProcessErrorAsync handler
                 sessionProcessor.ProcessErrorAsync += args =>
@@ -73,9 +86,14 @@ namespace ServiceBus
                 // Start processing messages from the session
                 await sessionProcessor.StartProcessingAsync();
 
+<<<<<<< HEAD
                 // Wait for user input to stop processing messages from the session
                 Console.WriteLine("Press any key to stop processing messages from this subscription...");
                 Console.ReadKey();
+=======
+            // Keep the processor running for 5 minutes
+            await Task.Delay(TimeSpan.FromMinutes(15));
+>>>>>>> parent of b8c2a97 (pass session id as argument)
 
                 // Stop processing messages from the session
                 await sessionProcessor.StopProcessingAsync();
