@@ -21,28 +21,39 @@ namespace ServiceBus;
             connectionString = configuration["ServiceBus:ServiceBusConnectionString"];
             queueName = configuration["ServiceBus:QueueName"];
 
-            string session = args[0];
+            List<string> sessions = new List<string>() { "12", "34", "ab" };      
+            // Create a list of tasks to execute concurrently
+            var tasks = new List<Task>();
+            foreach (string sessionId in sessions)
+            {
+                string taskId = sessionId;// Guid.NewGuid().ToString();
+                tasks.Add(ProcessMessages(sessionId, taskId));
+              //  Console.WriteLine("task added");
+            }
 
-            await ProcessMessageEventArgs(session);
+            // Wait for all tasks to complete
+            await Task.WhenAll(tasks);
+
+            }
+
+      //  static async Task ProcessMessages(string sessionId) {
+        static async Task ProcessMessages(string sessionId, string taskId) {
 
 
-        }
-
-        static async Task ProcessMessageEventArgs(string session) {
-
-                        // Create a ServiceBusClient and a ServiceBusSessionProcessor
+            Console.WriteLine($"Task to process '{sessionId}' sessions launched");
+            // Create a ServiceBusClient and a ServiceBusSessionProcessor
             await using var client = new ServiceBusClient(connectionString);
             var sessionProcessorOptions = new ServiceBusSessionProcessorOptions
             {
                 MaxConcurrentSessions = 1,
-                SessionIds = { session },
+                SessionIds = { sessionId },
 
             };
+           
             await using var sessionProcessor = client.CreateSessionProcessor(queueName, sessionProcessorOptions);
-
-            // Add a session handler
             sessionProcessor.ProcessMessageAsync += async args =>
             {
+
                 var message = args.Message;
                 // Deserialize the message body to a JObject
                 JObject body = JObject.Parse(message.Body.ToString());
@@ -50,8 +61,8 @@ namespace ServiceBus;
                 // Extract the i_ext and GK values from the JObject
                 string i_ext = (string)body["i_ext"];
                 string gk = (string)body["it_bit_it"][0]["GK"];
-                //Console.WriteLine($"Received session message with SessionId '{message.SessionId}' and MessageId '{message.MessageId}': {message.Body}");
-                Console.WriteLine($"Received session message SessionId '{message.SessionId}' : i_ext = '{i_ext}', GK = '{gk}'");
+                Console.WriteLine($"Message SessionId '{message.SessionId}' : i_ext = '{i_ext}', GK = '{gk}', TASK = '{taskId}'");
+
 
                 // Renew the session lock to prevent it from expiring prematurely
             //    await args.RenewSessionLockAsync();
@@ -70,7 +81,7 @@ namespace ServiceBus;
             };
 
             // Start the session processor and wait for session messages to arrive
-            Console.WriteLine($"Listening for session messages on queue '{queueName}'...");
+          //  Console.WriteLine($"Listening session messages on queue '{queueName}'... session '{sessionId}'.");
             await sessionProcessor.StartProcessingAsync();
 
             await Task.Delay(TimeSpan.FromMinutes(60));
