@@ -23,15 +23,16 @@ namespace ServiceBus;
 
            // string session = args[0];
 
-            await ProcessMessageEventArgs();
+         //   await ProcessMessageEventArgs();
 
+            
+            await DeleteDLQ();
 
         }
 
-       // static async Task ProcessMessageEventArgs(string session) {
-                    static async Task ProcessMessageEventArgs() {
+        static async Task ProcessMessageEventArgs() {
 
-                        // Create a ServiceBusClient and a ServiceBusSessionProcessor
+            // Create a ServiceBusClient and a ServiceBusSessionProcessor
             await using var client = new ServiceBusClient(connectionString);
             var sessionProcessorOptions = new ServiceBusSessionProcessorOptions
             {
@@ -61,7 +62,7 @@ namespace ServiceBus;
                 // Complete the session message to remove it from the queue
                 await args.CompleteMessageAsync(message);
                   // Renew the session lock
-                  await args.RenewSessionLockAsync();
+              //    await args.RenewSessionLockAsync();
                 
             };
 
@@ -82,4 +83,25 @@ namespace ServiceBus;
             await sessionProcessor.StopProcessingAsync();
 
         }
+
+        
+        static async Task DeleteDLQ() {
+
+            await using var client = new ServiceBusClient(connectionString);
+            await using var deadLetterReceiver = client.CreateReceiver(queueName + "/$DeadLetterQueue", new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete
+            });
+
+            var messages = await deadLetterReceiver.ReceiveMessagesAsync(maxMessages: 1000);
+            foreach (var message in messages)
+            {
+                // Process the message, if necessary
+
+                Console.WriteLine($"Deleted message {message.MessageId} from DLQ");
+            }
+
+        }
+        
+
     }
